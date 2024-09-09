@@ -111,23 +111,28 @@ def plot_ivs(ivs_surface, IVS='IVS', view='XY'):
 
 
 def load_image_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, NORM=255,
-                         RESIZE_FACTOR=4):
+                         RESIZE_FACTOR=4, TSTEP=1):
     Xs = list()               # Training inputs [0..TEST_IMAGES-1]
     Ys = list()               # Training outputs [1..TEST_IMAGES]
     ff = sorted(glob.glob(dd+'/*.png'))
     # XXX: Load the first TEST_IMAGES for training
     for i in range(START, START+NUM_IMAGES):
-        img = load_img(ff[i])   # PIL image
-        w, h = img.size
-        img = img.resize((w//RESIZE_FACTOR, h//RESIZE_FACTOR))
-        img_array = img_to_array(img)/NORM
-        Xs += [img_array]
-        # XXX: Now do the same thing for the output label image
-        img = load_img(ff[i+1])   # PIL image
-        w, h = img.size
-        img = img.resize((w//RESIZE_FACTOR, h//RESIZE_FACTOR))
-        img_array = img_to_array(img)/NORM
-        Ys += [img_array]
+        # print('i is: ', i)
+        for j in range(TSTEP):
+            # print('j is: ', j)
+            img = load_img(ff[i+j])   # PIL image
+            # print('loaded i, j: X(i+j)', i, j, (i+j))
+            w, h = img.size
+            img = img.resize((w//RESIZE_FACTOR, h//RESIZE_FACTOR))
+            img_array = img_to_array(img)/NORM
+            Xs += [img_array]
+            # XXX: Now do the same thing for the output label image
+            img = load_img(ff[i+TSTEP])   # PIL image
+            # print('loaded Y: i, TSTEP: (i+TSTEP)', i, TSTEP, (i+TSTEP))
+            w, h = img.size
+            img = img.resize((w//RESIZE_FACTOR, h//RESIZE_FACTOR))
+            img_array = img_to_array(img)/NORM
+            Ys += [img_array]
 
     # XXX: Convert the lists to np.array
     Xs = np.array(Xs)
@@ -288,7 +293,7 @@ def keras_model_fit(model, trainX, trainY, valX, valY):
 
     # Define modifiable training hyperparameters.
     epochs = 20
-    batch_size = 1
+    batch_size = 5
 
     # Fit the model to the training data.
     history = model.fit(
@@ -307,26 +312,28 @@ if __name__ == '__main__':
     # XXX: Excel data to images
     # excel_to_images()
 
-    NIMAGES1 = 3000
+    NIMAGES1 = 2000
     TSTEPS = 10
     START = 0
 
     # Load, process and learn a ConvLSTM2D network
-    trainX, trainY = load_image_for_keras(START=START, NUM_IMAGES=NIMAGES1)
+    trainX, trainY = load_image_for_keras(START=START, NUM_IMAGES=NIMAGES1,
+                                          TSTEP=TSTEPS)
     print(trainX.shape, trainY.shape)
-    trainX = trainX.reshape((NIMAGES1-START)//TSTEPS, TSTEPS,
+    trainX = trainX.reshape(trainX.shape[0]//TSTEPS, TSTEPS,
                             *trainX.shape[1:])
-    trainY = trainY.reshape((NIMAGES1-START)//TSTEPS, TSTEPS,
+    trainY = trainY.reshape(trainY.shape[0]//TSTEPS, TSTEPS,
                             *trainY.shape[1:])
     print(trainX.shape, trainY.shape)
 
     NIMAGES2 = 1000
     START = NIMAGES1
 
-    valX, valY = load_image_for_keras(START=START, NUM_IMAGES=NIMAGES2)
+    valX, valY = load_image_for_keras(START=START, NUM_IMAGES=NIMAGES2,
+                                      TSTEP=TSTEPS)
     print(valX.shape, valY.shape)
-    valX = valX.reshape((NIMAGES2-START)//TSTEPS, TSTEPS, *valX.shape[1:])
-    valY = valY.reshape((NIMAGES2-START)//TSTEPS, TSTEPS, *valY.shape[1:])
+    valX = valX.reshape(valX.shape[0]//TSTEPS, TSTEPS, *valX.shape[1:])
+    valY = valY.reshape(valY.shape[0]//TSTEPS, TSTEPS, *valY.shape[1:])
     print(valX.shape, valY.shape)
 
     # XXX: Now build the keras model
@@ -337,7 +344,7 @@ if __name__ == '__main__':
     history = keras_model_fit(model, trainX, trainY, valX, valY)
 
     # XXX: Save the model after training
-    model.save('model2.keras')
+    model.save('modelcr_bn.keras')
 
     # summarize history for loss
     plt.plot(history.history['loss'])
