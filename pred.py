@@ -11,19 +11,19 @@ import glob
 from keras.layers import Input, ConvLSTM2D, BatchNormalization, Conv3D
 from keras.models import Model
 import keras
-from PIL import Image
+# from PIL import Image
 # XXX: For plotting only
 import matplotlib.pyplot as plt
 
 # XXX: Moneyness Bounds inclusive
 LM = 0.9
 UM = 1.1
-MSTEP = 0.001
+MSTEP = 0.00333
 
 # XXX: Tau Bounds inclusive
 LT = 14
 UT = 366
-TSTEP = 1                       # days
+TSTEP = 5                       # days
 
 DAYS = 365
 
@@ -58,14 +58,21 @@ def preprocess_ivs_df(dfs: dict):
 
 def plot_hmap(ivs_hmap, mrows, tcols):
     for k in ivs_hmap.keys():
-        fig, ax = plt.subplots()
-        plt.axis('off')
+        # fig, ax = plt.subplots()
+        # plt.axis('off')
         # print(ivs_hmap[k]/ivs_hmap[k].max())
         # ax.set_xlabel(mrows)
         # ax.set_ylabel(tcols)
-        plt.imshow(ivs_hmap[k], cmap='afmhot', interpolation='none')
-        plt.savefig('/tmp/figs/{k}_hmap.png'.format(k=k), transparent=True)
-        plt.close(fig)
+        np.save('/tmp/figs/%s.npy' % k, ivs_hmap[k])
+        # print(ivs_hmap[k].shape)
+        # print(ivs_hmap[k])
+        # plt.imshow(ivs_hmap[k], cmap='afmhot', interpolation='none')
+        # extent = ax.get_window_extent().transformed(
+        #     fig.dpi_scale_trans.inverted())
+        # plt.savefig('/tmp/figs/{k}_hmap.png'.format(k=k),
+        #             bbox_inches='tight', pad_inches=0)
+        # plt.show()
+        # plt.close(fig)
         # break
 
 
@@ -103,30 +110,66 @@ def plot_ivs(ivs_surface, IVS='IVS', view='XY'):
         # fig.subplots_adjust(right=1)
         # fig.subplots_adjust(left=0)
         plt.savefig('/tmp/figs/{k}_{v}.png'.format(k=k, v=view),
-                    bbox_inches='tight', transparent=True, pad_inches=0)
+                    bbox_inches='tight', pad_inches=0)
         plt.close(fig)
         # XXX: Convert to gray scale 1 channel only
         # img = Image.open('/tmp/figs/{k}.png'.format(k=k)).convert('LA')
         # img.save('/tmp/figs/{k}.png'.format(k=k))
 
 
-def load_image_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, NORM=255,
-                         RESIZE_FACTOR=8, TSTEP=1):
-
-    def rgb2gray(rgb):
-        return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
+def load_data_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, TSTEP=1):
 
     Xs = list()               # Training inputs [0..TEST_IMAGES-1]
     Ys = list()               # Training outputs [1..TEST_IMAGES]
+    Ysdates = list()
+    ff = sorted(glob.glob(dd+'/*.npy'))
+    # XXX: Load the first TEST_IMAGES for training
+    # print('In load image!')
+    for i in range(START, START+NUM_IMAGES):
+        # print('i is: ', i)
+        for j in range(TSTEP):
+            # print('j is: ', j)
+            img = np.load(ff[i+j])   # PIL image
+            np.all((img > 0) & (img <= 1))
+            # print('loaded i, j: X(i+j)', i, j,
+            #       ff[i+j].split('/')[-1].split('.')[0])
+            Xs += [img]
+
+        # XXX: Just one output image to compare against
+        # XXX: Now do the same thing for the output label image
+        # img = Image.open(ff[i+TSTEP]).convert('LA')
+        img = np.load(ff[i+TSTEP])   # PIL image
+        np.all((img > 0) & (img <= 1))
+        # print('loaded Y: i, TSTEP: (i+TSTEP)', i, TSTEP,
+        #       ff[(i+TSTEP)].split('/')[-1].split('_')[0])
+        Ysdates.append(ff[(i+TSTEP)].split('/')[-1].split('.')[0])
+        Ys += [img]
+
+    # XXX: Convert the lists to np.array
+    Xs = np.array(Xs)
+    Ys = np.array(Ys)
+    np.expand_dims(Xs, axis=-1)
+    np.expand_dims(Ys, axis=-1)
+    return Xs, Ys, Ysdates
+
+
+def load_image_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, NORM=255,
+                         RESIZE_FACTOR=8, TSTEP=1):
+
+    Xs = list()               # Training inputs [0..TEST_IMAGES-1]
+    Ys = list()               # Training outputs [1..TEST_IMAGES]
+    Ysdates = list()
     ff = sorted(glob.glob(dd+'/*.png'))
     # XXX: Load the first TEST_IMAGES for training
+    # print('In load image!')
     for i in range(START, START+NUM_IMAGES):
         # print('i is: ', i)
         for j in range(TSTEP):
             # print('j is: ', j)
             # img = Image.open(ff[i+j]).convert('LA')
             img = load_img(ff[i+j])   # PIL image
-            # print('loaded i, j: X(i+j)', i, j, (i+j))
+            # print('loaded i, j: X(i+j)', i, j,
+            #       ff[i+j].split('/')[-1].split('_')[0])
             w, h = img.size
             img = img.resize((w//RESIZE_FACTOR, h//RESIZE_FACTOR))
             img_gray = img.convert('L')
@@ -138,7 +181,9 @@ def load_image_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, NORM=255,
         # XXX: Now do the same thing for the output label image
         # img = Image.open(ff[i+TSTEP]).convert('LA')
         img = load_img(ff[i+TSTEP])   # PIL image
-        # print('loaded Y: i, TSTEP: (i+TSTEP)', i, TSTEP, (i+TSTEP))
+        # print('loaded Y: i, TSTEP: (i+TSTEP)', i, TSTEP,
+        #       ff[(i+TSTEP)].split('/')[-1].split('_')[0])
+        Ysdates.append(ff[(i+TSTEP)].split('/')[-1].split('_')[0])
         w, h = img.size
         img = img.resize((w//RESIZE_FACTOR, h//RESIZE_FACTOR))
         img_gray = img.convert('L')
@@ -161,7 +206,7 @@ def load_image_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, NORM=255,
     Ys = np.array(Ys)
     np.expand_dims(Xs, axis=-1)
     np.expand_dims(Ys, axis=-1)
-    return Xs, Ys
+    return Xs, Ys, Ysdates
 
 
 def main(mdir, years, months, instrument, dfs: dict):
@@ -173,10 +218,13 @@ def main(mdir, years, months, instrument, dfs: dict):
                 tosearch = "*_{y}_{m}*.zip".format(y=y, m=m)
                 if fnmatch.fnmatch(f, tosearch):
                     ff += [f]
-                    # XXX: Read the csvs
+    # print(ff)
+    # XXX: Read the csvs
     for f in ff:
-        z = zip.ZipFile(dir+f)
+        z = zip.ZipFile(mdir+f)
         ofs = [i for i in z.namelist() if 'options_' in i]
+        # print(ofs)
+        # assert (1 == 2)
         # XXX: Now read just the option data files
         for f in ofs:
             key = f.split(".csv")[0].split("_")[2]
@@ -187,6 +235,7 @@ def main(mdir, years, months, instrument, dfs: dict):
 
 
 def build_gird_and_images(df):
+    # print('building grid and fitting')
     # XXX: Now fit a multi-variate linear regression to the dataset
     # one for each day.
     df = dict(sorted(df.items()))
@@ -194,9 +243,12 @@ def build_gird_and_images(df):
     grid = dict()
     scores = list()
     for k in df.keys():
+        # print('doing key: ', k)
         y = df[k]['IV']
         X = df[k][['m', 'tau', 'm2', 'tau2', 'mtau']]
+        # print('fitting')
         reg = LinearRegression(n_jobs=-1).fit(X, y)
+        # print('fitted')
         fitted_dict[k] = reg
         scores += [reg.score(X, y)]
 
@@ -204,12 +256,14 @@ def build_gird_and_images(df):
         ss = []
         mms = np.arange(LM, UM+MSTEP, MSTEP)
         tts = [i/DAYS for i in range(LT, UT+TSTEP, TSTEP)]
+        # print('making grid: ', len(mms), len(tts))
         for mm in mms:
             for tt in tts:
                 # XXX: Make the feature vector
-                ss += [[mm, tt, mm**2, tt**2, mm*tt]]
-                grid[k] = pd.DataFrame(ss, columns=['m', 'tau', 'm2',
-                                                    'tau2', 'mtau'])
+                ss.append([mm, tt, mm**2, tt**2, mm*tt])
+
+        grid[k] = pd.DataFrame(ss, columns=['m', 'tau', 'm2', 'tau2', 'mtau'])
+        # print('made grid and output')
 
     print("average fit score: ", sum(scores)/len(scores))
     # XXX: Now make the smooth ivs surface for each day
@@ -234,17 +288,18 @@ def build_gird_and_images(df):
         # print('ivs hmap shape: ', ivs_surf_hmap[k].shape)
 
     # XXX: Plot the heatmap
-    # plot_hmap(ivs_surf_hmap, mms, tts)
+    plot_hmap(ivs_surf_hmap, mms, tts)
 
     # XXX: Plot the ivs surface
     # plot_ivs(ivs_surface, view='XY')
 
 
 def excel_to_images():
-    dir = '../HistoricalOptionsData/'
+    dir = '../../HistoricalOptionsData/'
     years = [str(i) for i in range(2011, 2024)]
-    months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-              'August', 'September', 'October', 'November', 'December']
+    months = ['January', 'February',  'March', 'April', 'May', 'June', 'July',
+              'August', 'September', 'October', 'November', 'December'
+              ]
     instrument = ["SPX"]
     dfs = dict()
     # XXX: The dictionary of all the dataframes with the requires
@@ -260,7 +315,7 @@ def excel_to_images():
         build_gird_and_images(df)
 
 
-def build_keras_model(shape, LR=1e-3):
+def build_keras_model(shape, inner_filters, LR=1e-3):
     inp = Input(shape=shape[1:])
     x = ConvLSTM2D(
         filters=32,
@@ -279,7 +334,7 @@ def build_keras_model(shape, LR=1e-3):
         return_sequences=True)(x)
     x = BatchNormalization()(x)
     x = ConvLSTM2D(
-        filters=64,
+        filters=inner_filters,
         kernel_size=(3, 3),
         data_format='channels_last',
         padding='same',
@@ -287,7 +342,7 @@ def build_keras_model(shape, LR=1e-3):
         return_sequences=True)(x)
     x = BatchNormalization()(x)
     x = ConvLSTM2D(
-        filters=64,
+        filters=inner_filters,
         kernel_size=(1, 1),
         data_format='channels_last',
         padding='same',
@@ -310,7 +365,7 @@ def build_keras_model(shape, LR=1e-3):
     # print('TOT:', tot)
     # x = keras.layers.Dense(units=tot, activation='relu')(x)
     # # XXX: Reshape the output
-    x = keras.layers.Reshape(shape[2:])(x)
+    x = keras.layers.Reshape(shape[2:4])(x)
 
     # XXX: The complete model and compiled
     model = Model(inp, x)
@@ -319,17 +374,17 @@ def build_keras_model(shape, LR=1e-3):
     return model
 
 
-def keras_model_fit(model, trainX, trainY, valX, valY):
+def keras_model_fit(model, trainX, trainY, valX, valY, batch_size):
     # Define some callbacks to improve training.
-    # early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss",
-    #                                                patience=10,
-    #              -                                  restore_best_weights=True)
+    early_stopping = keras.callbacks.EarlyStopping(monitor="val_loss",
+                                                   patience=10,
+                                                   restore_best_weights=True)
     reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor="val_loss",
                                                   patience=5)
 
     # Define modifiable training hyperparameters.
-    epochs = 20
-    batch_size = 10
+    epochs = 50
+    # batch_size = 2
 
     # Fit the model to the training data.
     history = model.fit(
@@ -339,25 +394,22 @@ def keras_model_fit(model, trainX, trainY, valX, valY):
         epochs=epochs,
         validation_data=(valX, valY),
         verbose=1,
-        # callbacks=[early_stopping, reduce_lr])
-        callbacks=[reduce_lr])
+        callbacks=[early_stopping, reduce_lr])
+    # callbacks=[reduce_lr])
     return history
 
 
-if __name__ == '__main__':
-    # XXX: Excel data to images
-    # excel_to_images()
-
+def convlstm_predict():
     NIMAGES1 = 2000
-    TSTEPS = 10
+    TSTEPS = 5
     START = 0
 
     # Load, process and learn a ConvLSTM2D network
-    trainX, trainY = load_image_for_keras(START=START, NUM_IMAGES=NIMAGES1,
-                                          TSTEP=TSTEPS)
+    trainX, trainY, _ = load_data_for_keras(START=START, NUM_IMAGES=NIMAGES1,
+                                            TSTEP=TSTEPS)
     print(trainX.shape, trainY.shape)
     trainX = trainX.reshape(trainX.shape[0]//TSTEPS, TSTEPS,
-                            *trainX.shape[1:])
+                            *trainX.shape[1:], 1)
     # trainY = trainY.reshape(trainY.shape[0]//TSTEPS, TSTEPS,
     #                         *trainY.shape[1:])
     print(trainX.shape, trainY.shape)
@@ -365,22 +417,27 @@ if __name__ == '__main__':
     NIMAGES2 = 1000
     START = NIMAGES1
 
-    valX, valY = load_image_for_keras(START=START, NUM_IMAGES=NIMAGES2,
-                                      TSTEP=TSTEPS)
+    valX, valY, _ = load_data_for_keras(START=START, NUM_IMAGES=NIMAGES2,
+                                        TSTEP=TSTEPS)
     print(valX.shape, valY.shape)
-    valX = valX.reshape(valX.shape[0]//TSTEPS, TSTEPS, *valX.shape[1:])
+    valX = valX.reshape(valX.shape[0]//TSTEPS, TSTEPS, *valX.shape[1:], 1)
     # valY = valY.reshape(valY.shape[0]//TSTEPS, TSTEPS, *valY.shape[1:])
     print(valX.shape, valY.shape)
 
+    # XXX: Inner number of filters
+    inner_filters = 64
+
     # XXX: Now build the keras model
-    model = build_keras_model(trainX.shape)
+    model = build_keras_model(trainX.shape, inner_filters)
     print(model.summary())
 
     # XXX: Now fit the model
-    history = keras_model_fit(model, trainX, trainY, valX, valY)
+    batch_size = 5
+    history = keras_model_fit(model, trainX, trainY, valX, valY, batch_size)
 
     # XXX: Save the model after training
-    model.save('modelcr_bn.keras')
+    model.save('modelcr_bs_%s_ts_%s_filters_%s.keras' %
+               (batch_size, TSTEPS, inner_filters))
 
     # summarize history for loss
     plt.plot(history.history['loss'])
@@ -389,4 +446,11 @@ if __name__ == '__main__':
     plt.ylabel('loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'test'], loc='upper left')
-    plt.show()
+    plt.savefig('history_bs_%s_ts_%s_filters_%s.pdf' % (batch_size, TSTEPS,
+                                                        inner_filters))
+
+
+if __name__ == '__main__':
+    # XXX: Excel data to images
+    # excel_to_images()
+    convlstm_predict()
