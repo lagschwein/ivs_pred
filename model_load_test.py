@@ -1,29 +1,31 @@
 #!/usr/bin/env python
 
-import keras
+import tensorflow as tf
+from tensorflow import keras 
 import pred
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import colormaps as cm
 import glob
 
 
-def date_to_num(date, dd='./figs'):
-    ff = sorted(glob.glob(dd+'/*.npy'))
+def date_to_num(date, dd='.\\figs'):
+    ff = sorted(glob.glob(dd+'\\*.npy'))
     count = 0
     for i in ff:
-        if i.split('/')[-1].split('.')[0] == date:
+        if i.split('\\')[-1].split('.')[0] == date:
             break
         count += 1
     return count
 
 
-def num_to_date(num, dd='./figs'):
-    ff = sorted(glob.glob(dd+'/*.npy'))
-    return ff[num].split('/')[-1].split('.')[0]
+def num_to_date(num, dd='.\\figs'):
+    ff = sorted(glob.glob(dd+'\\*.npy'))
+    return ff[num].split('\\')[-1].split('.')[0]
 
 
-def load_image(num, dd='./figs'):
-    ff = sorted(glob.glob(dd+'/*.npy'))
+def load_image(num, dd='.\\figs'):
+    ff = sorted(glob.glob(dd+'\\*.npy'))
     img = np.load(ff[num])
     return img
 
@@ -49,8 +51,8 @@ def main():
     print(valX.shape, valY.shape)
 
     # XXX: Load the model
-    m1 = keras.saving.load_model(
-        './modelcr_bs_%s_ts_%s_filters_%s.keras' % (bs, pred.TSTEPS, nf))
+    m1 = keras.models.load_model(
+        './modelcr_bs_%s_ts_%s_filters_%s_%s.keras' % (bs, pred.TSTEPS, nf, tf.__version__))
     print(m1.summary())
 
     # XXX: The moneyness
@@ -72,6 +74,7 @@ def main():
             # XXX: Then we can get this figure
             fig, axs = plt.subplots(1, 3,
                                     subplot_kw=dict(projection='3d'))
+            (ax.view_init(30, 45) for ax in axs)
             axs[0].title.set_text('Truth: ' + yd)
             # XXX: Make the y dataframe
             ydf = list()
@@ -80,8 +83,10 @@ def main():
                     ydf.append([m, t, y[cm, ct]])
             ydf = np.array(ydf)
             axs[0].plot_trisurf(ydf[:, 0], ydf[:, 1], ydf[:, 2],
-                                cmap='afmhot', linewidth=0.2,
+                                cmap='jet', linewidth=0.1,
                                 antialiased=True)
+            min_z = ydf[:, 2].min()
+            axs[0].tricontourf(ydf[:, 0], ydf[:, 1], ydf[:, 2], zdir='z', offset=min_z, cmap='coolwarm')
             axs[0].set_xlabel('Moneyness')
             axs[0].set_ylabel('Term structure')
             axs[0].set_zlabel('Vol %')
@@ -93,8 +98,10 @@ def main():
                     ypdf.append([m, t, yp[cm, ct]])
             ypdf = np.array(ypdf)
             axs[1].plot_trisurf(ypdf[:, 0], ypdf[:, 1], ypdf[:, 2],
-                                cmap='afmhot', linewidth=0.2,
+                                cmap='jet', linewidth=0.2,
                                 antialiased=True)
+            min_z_pred = ypdf[:, 2].min()
+            axs[1].tricontourf(ypdf[:, 0], ypdf[:, 1], ypdf[:, 2], zdir='z', offset=min_z_pred, cmap='coolwarm')
             axs[1].set_xlabel('Moneyness')
             axs[1].set_ylabel('Term structure')
             axs[1].set_zlabel('Vol %')
@@ -109,8 +116,10 @@ def main():
                     xdf.append([m, t, ximg[cm, ct]])
             xdf = np.array(xdf)
             axs[2].plot_trisurf(xdf[:, 0], xdf[:, 1], xdf[:, 2],
-                                cmap='afmhot', linewidth=0.2,
+                                cmap='jet', linewidth=0.2,
                                 antialiased=True)
+            min_z_x = xdf[:, 2].min()
+            axs[2].tricontourf(xdf[:, 0], xdf[:, 1], xdf[:, 2], zdir='z', offset=min_z_x, cmap='coolwarm')
             axs[2].set_xlabel('Moneyness')
             axs[2].set_ylabel('Term structure')
             axs[2].set_zlabel('Vol %')

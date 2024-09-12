@@ -6,7 +6,8 @@ import fnmatch
 import zipfile as zip
 from sklearn.linear_model import LinearRegression
 import numpy as np
-from keras.preprocessing.image import load_img, img_to_array
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import glob
 from keras.layers import Input, ConvLSTM2D, BatchNormalization, Conv3D
 from keras.models import Model
@@ -117,12 +118,12 @@ def plot_ivs(ivs_surface, IVS='IVS', view='XY'):
         # img.save('/tmp/figs/{k}.png'.format(k=k))
 
 
-def load_data_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, TSTEP=1):
+def load_data_for_keras(dd='.\\figs', START=0, NUM_IMAGES=1000, TSTEP=1):
 
     Xs = list()               # Training inputs [0..TEST_IMAGES-1]
     Ys = list()               # Training outputs [1..TEST_IMAGES]
     Ysdates = list()
-    ff = sorted(glob.glob(dd+'/*.npy'))
+    ff = sorted(glob.glob(dd+'\\*.npy'))
     # XXX: Load the first TEST_IMAGES for training
     # print('In load image!')
     for i in range(START, START+NUM_IMAGES):
@@ -142,7 +143,7 @@ def load_data_for_keras(dd='./figs', START=0, NUM_IMAGES=1000, TSTEP=1):
         np.all((img > 0) & (img <= 1))
         # print('loaded Y: i, TSTEP: (i+TSTEP)', i, TSTEP,
         #       ff[(i+TSTEP)].split('/')[-1].split('_')[0])
-        Ysdates.append(ff[(i+TSTEP)].split('/')[-1].split('.')[0])
+        Ysdates.append(ff[(i+TSTEP)].split('\\')[-1].split('.')[0])
         Ys += [img]
 
     # XXX: Convert the lists to np.array
@@ -383,7 +384,7 @@ def keras_model_fit(model, trainX, trainY, valX, valY, batch_size):
                                                   patience=5)
 
     # Define modifiable training hyperparameters.
-    epochs = 50
+    epochs = 10 
     # batch_size = 2
 
     # Fit the model to the training data.
@@ -436,8 +437,8 @@ def convlstm_predict():
     history = keras_model_fit(model, trainX, trainY, valX, valY, batch_size)
 
     # XXX: Save the model after training
-    model.save('modelcr_bs_%s_ts_%s_filters_%s.keras' %
-               (batch_size, TSTEPS, inner_filters))
+    model.save('modelcr_bs_%s_ts_%s_filters_%s_%s.keras' %
+               (batch_size, TSTEPS, inner_filters, tf.__version__))
 
     # summarize history for loss
     plt.plot(history.history['loss'])
